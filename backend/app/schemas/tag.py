@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TagCreate(BaseModel):
@@ -21,3 +21,13 @@ class TagResponse(BaseModel):
     name: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ContactTagCreate(BaseModel):
+    tag_id: int = Field(gt=0)
+
+
+class ContactTagResponse(BaseModel):
+    contact_id: int
+    tag_id: int
+    tag_name: str
