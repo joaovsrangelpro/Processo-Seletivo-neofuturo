@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 from app.schemas.tag import TagResponse
 from app.services.normalization import (
+    normalize_cep,
     normalize_email,
     normalize_name,
     normalize_phone,
@@ -60,6 +61,23 @@ class ContactImportResponse(BaseModel):
     imported: int
     rejected: int
     errors: list[ContactImportError]
+
+
+class AddressEnrichmentRequest(BaseModel):
+    cep: str
+
+    @field_validator("cep", mode="before")
+    @classmethod
+    def normalize_address_cep(cls, value: object) -> object:
+        return normalize_cep(value) if isinstance(value, str) else value
+
+
+class AddressEnrichmentResponse(BaseModel):
+    cep: str
+    logradouro: str
+    bairro: str
+    cidade: str
+    uf: str
 
 
 class ContactListItem(ContactResponse):

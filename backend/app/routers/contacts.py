@@ -12,6 +12,8 @@ from app.models.contact import Contact
 from app.models.contact_tag import ContactTag
 from app.models.tag import Tag
 from app.schemas.contact import (
+    AddressEnrichmentRequest,
+    AddressEnrichmentResponse,
     AISummaryResponse,
     ContactCreate,
     ContactDetailResponse,
@@ -22,6 +24,12 @@ from app.schemas.contact import (
     ContactResponse,
 )
 from app.schemas.tag import ContactTagCreate, ContactTagResponse, TagResponse
+from app.services.viacep_service import (
+    ViaCEPNotFoundError,
+    ViaCEPServiceError,
+    ViaCEPTimeoutError,
+    fetch_address,
+)
 
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
@@ -33,6 +41,9 @@ TAG_NOT_FOUND_DETAIL = "Tag not found."
 DUPLICATE_ASSOCIATION_DETAIL = "This tag is already associated with the contact."
 ASSOCIATION_NOT_FOUND_DETAIL = "This tag is not associated with the contact."
 ASSOCIATION_DELETE_CONFLICT_DETAIL = "The tag association could not be removed."
+CEP_NOT_FOUND_DETAIL = "CEP not found."
+VIACEP_UNAVAILABLE_DETAIL = "ViaCEP service is unavailable."
+VIACEP_TIMEOUT_DETAIL = "ViaCEP request timed out."
 
 
 def _format_validation_error(error: ValidationError) -> str:
@@ -243,6 +254,57 @@ def get_contact(
             else None
         ),
     )
+
+
+@router.post(
+    "/{contact_id}/enrich-address",
+    response_model=AddressEnrichmentResponse,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "description": "Contact or CEP not found.",
+        },
+        status.HTTP_502_BAD_GATEWAY: {
+            "description": "ViaCEP is unavailable or returned an invalid response.",
+        },
+        status.HTTP_504_GATEWAY_TIMEOUT: {
+            "description": "ViaCEP request timed out.",
+        },
+    },
+)
+async def enrich_contact_address(
+    contact_id: int,
+    payload: AddressEnrichmentRequest,
+    db: Session = Depends(get_db),
+) -> AddressEnrichmentResponse:
+    contact = db.get(Contact, contact_id)
+    if contact is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CONTACT_NOT_FOUND_DETAIL,
+        )
+
+    try:
+        address = await fetch_address(payload.cep)
+    except ViaCEPNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CEP_NOT_FOUND_DETAIL,
+        ) from error
+    except ViaCEPTimeoutError as error:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=VIACEP_TIMEOUT_DETAIL,
+        ) from error
+    except ViaCEPServiceError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=VIACEP_UNAVAILABLE_DETAIL,
+        ) from error
+
+    contact.address = address.model_dump()
+    db.commit()
+    db.refresh(contact, attribute_names=["address"])
+    return AddressEnrichmentResponse.model_validate(contact.address)
 
 
 @router.post(

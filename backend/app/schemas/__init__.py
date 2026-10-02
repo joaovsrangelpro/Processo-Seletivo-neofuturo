@@ -1,4 +1,6 @@
 from app.schemas.contact import (
+    AddressEnrichmentRequest,
+    AddressEnrichmentResponse,
     AISummaryResponse,
     ContactCreate,
     ContactDetailResponse,
@@ -12,6 +14,8 @@ from app.schemas.tag import ContactTagCreate, ContactTagResponse, TagCreate, Tag
 
 
 __all__ = [
+    "AddressEnrichmentRequest",
+    "AddressEnrichmentResponse",
     "AISummaryResponse",
     "ContactCreate",
     "ContactDetailResponse",

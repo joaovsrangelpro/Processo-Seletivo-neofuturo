@@ -22,5 +22,12 @@ def normalize_phone(value: str) -> str:
     return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
 
 
+def normalize_cep(value: str) -> str:
+    normalized = value.strip()
+    if not re.fullmatch(r"\d{5}-?\d{3}", normalized):
+        raise ValueError("CEP must contain exactly 8 digits, with an optional hyphen.")
+    return normalized.replace("-", "")
+
+
 def normalize_source(value: str | None) -> str | None:
     return value.strip() if value is not None else None
