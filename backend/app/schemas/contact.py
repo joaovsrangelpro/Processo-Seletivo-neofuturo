@@ -51,6 +51,17 @@ class ContactResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ContactImportError(BaseModel):
+    index: int
+    reason: str
+
+
+class ContactImportResponse(BaseModel):
+    imported: int
+    rejected: int
+    errors: list[ContactImportError]
+
+
 class ContactListItem(ContactResponse):
     has_ai_summary: bool
 

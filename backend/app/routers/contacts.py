@@ -1,6 +1,7 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import ValidationError
 from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
@@ -14,6 +15,8 @@ from app.schemas.contact import (
     AISummaryResponse,
     ContactCreate,
     ContactDetailResponse,
+    ContactImportError,
+    ContactImportResponse,
     ContactListItem,
     ContactListResponse,
     ContactResponse,
@@ -24,11 +27,21 @@ from app.schemas.tag import ContactTagCreate, ContactTagResponse, TagResponse
 router = APIRouter(prefix="/contacts", tags=["contacts"])
 
 DUPLICATE_EMAIL_DETAIL = "A contact with this email already exists."
+DUPLICATE_BATCH_EMAIL_DETAIL = "Duplicate email in import batch."
 CONTACT_NOT_FOUND_DETAIL = "Contact not found."
 TAG_NOT_FOUND_DETAIL = "Tag not found."
 DUPLICATE_ASSOCIATION_DETAIL = "This tag is already associated with the contact."
 ASSOCIATION_NOT_FOUND_DETAIL = "This tag is not associated with the contact."
 ASSOCIATION_DELETE_CONFLICT_DETAIL = "The tag association could not be removed."
+
+
+def _format_validation_error(error: ValidationError) -> str:
+    messages = []
+    for detail in error.errors():
+        location = ".".join(str(part) for part in detail["loc"])
+        prefix = f"{location}: " if location else ""
+        messages.append(f"{prefix}{detail['msg']}")
+    return "; ".join(messages)
 
 
 @router.get("", response_model=ContactListResponse)
@@ -113,6 +126,84 @@ def create_contact(
 
     db.refresh(contact)
     return contact
+
+
+@router.post("/import", response_model=ContactImportResponse)
+def import_contacts(
+    raw_contacts: list[Any],
+    db: Session = Depends(get_db),
+) -> ContactImportResponse:
+    errors: list[ContactImportError] = []
+    candidates: list[tuple[int, ContactCreate]] = []
+    seen_emails: set[str] = set()
+
+    for index, raw_contact in enumerate(raw_contacts):
+        try:
+            payload = ContactCreate.model_validate(raw_contact)
+        except ValidationError as error:
+            errors.append(
+                ContactImportError(
+                    index=index,
+                    reason=_format_validation_error(error),
+                )
+            )
+            continue
+
+        email = str(payload.email)
+        if email in seen_emails:
+            errors.append(
+                ContactImportError(
+                    index=index,
+                    reason=DUPLICATE_BATCH_EMAIL_DETAIL,
+                )
+            )
+            continue
+
+        seen_emails.add(email)
+        candidates.append((index, payload))
+
+    existing_emails = set(
+        db.scalars(
+            select(func.lower(Contact.email)).where(
+                func.lower(Contact.email).in_(seen_emails)
+            )
+        ).all()
+    )
+    imported = 0
+
+    for index, payload in candidates:
+        email = str(payload.email)
+        if email in existing_emails:
+            errors.append(
+                ContactImportError(index=index, reason=DUPLICATE_EMAIL_DETAIL)
+            )
+            continue
+
+        contact = Contact(
+            full_name=payload.full_name,
+            email=email,
+            phone=payload.phone,
+            source=payload.source,
+        )
+        try:
+            with db.begin_nested():
+                db.add(contact)
+                db.flush()
+        except IntegrityError:
+            errors.append(
+                ContactImportError(index=index, reason=DUPLICATE_EMAIL_DETAIL)
+            )
+            continue
+
+        imported += 1
+
+    db.commit()
+    errors.sort(key=lambda error: error.index)
+    return ContactImportResponse(
+        imported=imported,
+        rejected=len(errors),
+        errors=errors,
+    )
 
 
 @router.get("/{contact_id}", response_model=ContactDetailResponse)
