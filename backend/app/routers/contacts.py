@@ -3,9 +3,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import ValidationError
 from sqlalchemy import exists, func, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.models.ai_summary import AISummary
 from app.models.contact import Contact
@@ -24,6 +25,12 @@ from app.schemas.contact import (
     ContactResponse,
 )
 from app.schemas.tag import ContactTagCreate, ContactTagResponse, TagResponse
+from app.services.openai_service import (
+    OpenAIRateLimitError,
+    OpenAIServiceError,
+    OpenAITimeoutError,
+    generate_contact_summary,
+)
 from app.services.viacep_service import (
     ViaCEPNotFoundError,
     ViaCEPServiceError,
@@ -44,6 +51,11 @@ ASSOCIATION_DELETE_CONFLICT_DETAIL = "The tag association could not be removed."
 CEP_NOT_FOUND_DETAIL = "CEP not found."
 VIACEP_UNAVAILABLE_DETAIL = "ViaCEP service is unavailable."
 VIACEP_TIMEOUT_DETAIL = "ViaCEP request timed out."
+OPENAI_KEY_MISSING_DETAIL = "OpenAI service is not configured."
+OPENAI_RATE_LIMIT_DETAIL = "OpenAI rate limit exceeded."
+OPENAI_UNAVAILABLE_DETAIL = "OpenAI service is unavailable."
+OPENAI_TIMEOUT_DETAIL = "OpenAI request timed out."
+SUMMARY_PERSISTENCE_DETAIL = "The summary could not be saved."
 
 
 def _format_validation_error(error: ValidationError) -> str:
@@ -254,6 +266,91 @@ def get_contact(
             else None
         ),
     )
+
+
+@router.post(
+    "/{contact_id}/summarize",
+    response_model=AISummaryResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        status.HTTP_404_NOT_FOUND: {"description": "Contact not found."},
+        status.HTTP_429_TOO_MANY_REQUESTS: {
+            "description": "OpenAI rate limit exceeded.",
+        },
+        status.HTTP_502_BAD_GATEWAY: {
+            "description": "OpenAI returned an error or invalid response.",
+        },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "OpenAI API key is not configured.",
+        },
+        status.HTTP_504_GATEWAY_TIMEOUT: {
+            "description": "OpenAI request timed out.",
+        },
+    },
+)
+def summarize_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+) -> AISummary:
+    contact = db.scalar(
+        select(Contact)
+        .options(selectinload(Contact.tags))
+        .where(Contact.id == contact_id)
+    )
+    if contact is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CONTACT_NOT_FOUND_DETAIL,
+        )
+
+    api_key = settings.openai_api_key
+    if api_key is None or not api_key.strip():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=OPENAI_KEY_MISSING_DETAIL,
+        )
+
+    tag_names = [
+        tag.name
+        for tag in sorted(contact.tags, key=lambda tag: (tag.name.lower(), tag.id))
+    ]
+    try:
+        summary_text = generate_contact_summary(
+            api_key=api_key.strip(),
+            full_name=contact.full_name,
+            email=contact.email,
+            phone=contact.phone,
+            tags=tag_names,
+        )
+    except OpenAIRateLimitError as error:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=OPENAI_RATE_LIMIT_DETAIL,
+        ) from error
+    except OpenAITimeoutError as error:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=OPENAI_TIMEOUT_DETAIL,
+        ) from error
+    except OpenAIServiceError as error:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=OPENAI_UNAVAILABLE_DETAIL,
+        ) from error
+
+    summary = AISummary(contact_id=contact.id, summary_text=summary_text)
+    db.add(summary)
+    try:
+        db.commit()
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=SUMMARY_PERSISTENCE_DETAIL,
+        ) from error
+
+    db.refresh(summary)
+    return summary
 
 
 @router.post(

@@ -94,6 +94,7 @@ class ContactListResponse(BaseModel):
 
 class AISummaryResponse(BaseModel):
     id: int
+    contact_id: int
     summary_text: str
     generated_at: datetime
 
