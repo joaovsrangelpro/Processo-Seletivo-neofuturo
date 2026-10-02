@@ -65,6 +65,12 @@ def test_generate_summary_configures_single_responses_call(
     assert request_data["store"] is False
     prompt = request_data["input"]
     assert "no máximo 3 frases" in prompt
+    assert "em tom profissional" in prompt
+    assert "Não presuma profissão, cargo, experiência, empresa" in prompt
+    assert "interesses, qualificações" in prompt
+    assert "não a interprete como ausência de experiência" in prompt
+    assert "Descreva somente os fatos fornecidos" in prompt
+    assert "Gere um resumo profissional" not in prompt
     assert "Nome: Joao Victor Rangel" in prompt
     assert "Email: joao@example.com" in prompt
     assert "Telefone: (21) 98765-4321" in prompt
@@ -81,6 +87,7 @@ def test_prompt_uses_none_for_empty_tags() -> None:
     )
 
     assert "Tags: nenhuma" in prompt
+    assert "A ausência de tags significa somente que não há tags associadas" in prompt
 
 
 @pytest.mark.parametrize(

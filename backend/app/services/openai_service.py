@@ -33,13 +33,20 @@ def build_summary_prompt(
 ) -> str:
     tags_text = ", ".join(tags) if tags else "nenhuma"
     return (
-        "Gere um resumo profissional conciso, de no máximo 3 frases, "
-        "com base somente nos dados abaixo.\n\n"
+        "Gere um resumo conciso, em tom profissional, de no máximo 3 frases, "
+        "usando exclusivamente as informações fornecidas abaixo.\n\n"
+        "Não presuma profissão, cargo, experiência, empresa, interesses, "
+        "qualificações ou qualquer outra informação que não esteja "
+        "explicitamente presente nos dados.\n"
+        "A ausência de tags significa somente que não há tags associadas; "
+        "não a interprete como ausência de experiência ou informações "
+        "profissionais.\n\n"
         f"Nome: {full_name}\n"
         f"Email: {email}\n"
         f"Telefone: {phone}\n"
         f"Tags: {tags_text}\n\n"
-        "Não invente informações que não estejam presentes nos dados."
+        "Não invente informações que não estejam presentes nos dados. "
+        "Descreva somente os fatos fornecidos."
     )
 
 
