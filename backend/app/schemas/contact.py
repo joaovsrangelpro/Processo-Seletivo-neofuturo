@@ -3,6 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
+from app.schemas.tag import TagResponse
 from app.services.normalization import (
     normalize_email,
     normalize_name,
@@ -60,3 +61,16 @@ class ContactListResponse(BaseModel):
     page_size: int
     total: int
     pages: int
+
+
+class AISummaryResponse(BaseModel):
+    id: int
+    summary_text: str
+    generated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ContactDetailResponse(ContactResponse):
+    tags: list[TagResponse]
+    latest_ai_summary: AISummaryResponse | None

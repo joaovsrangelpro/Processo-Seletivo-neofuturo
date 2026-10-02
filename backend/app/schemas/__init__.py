@@ -1,5 +1,7 @@
 from app.schemas.contact import (
+    AISummaryResponse,
     ContactCreate,
+    ContactDetailResponse,
     ContactListItem,
     ContactListResponse,
     ContactResponse,
@@ -8,7 +10,9 @@ from app.schemas.tag import ContactTagCreate, ContactTagResponse, TagCreate, Tag
 
 
 __all__ = [
+    "AISummaryResponse",
     "ContactCreate",
+    "ContactDetailResponse",
     "ContactListItem",
     "ContactListResponse",
     "ContactResponse",

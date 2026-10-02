@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.models.ai_summary import AISummary
@@ -11,12 +11,14 @@ from app.models.contact import Contact
 from app.models.contact_tag import ContactTag
 from app.models.tag import Tag
 from app.schemas.contact import (
+    AISummaryResponse,
     ContactCreate,
+    ContactDetailResponse,
     ContactListItem,
     ContactListResponse,
     ContactResponse,
 )
-from app.schemas.tag import ContactTagCreate, ContactTagResponse
+from app.schemas.tag import ContactTagCreate, ContactTagResponse, TagResponse
 
 
 router = APIRouter(prefix="/contacts", tags=["contacts"])
@@ -111,6 +113,45 @@ def create_contact(
 
     db.refresh(contact)
     return contact
+
+
+@router.get("/{contact_id}", response_model=ContactDetailResponse)
+def get_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+) -> ContactDetailResponse:
+    contact = db.scalar(
+        select(Contact)
+        .options(selectinload(Contact.tags))
+        .where(Contact.id == contact_id)
+    )
+    if contact is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=CONTACT_NOT_FOUND_DETAIL,
+        )
+
+    latest_summary = db.scalar(
+        select(AISummary)
+        .where(AISummary.contact_id == contact_id)
+        .order_by(AISummary.generated_at.desc(), AISummary.id.desc())
+        .limit(1)
+    )
+    contact_data = ContactResponse.model_validate(contact).model_dump()
+    tags = [
+        TagResponse.model_validate(tag)
+        for tag in sorted(contact.tags, key=lambda item: (item.name.lower(), item.id))
+    ]
+
+    return ContactDetailResponse(
+        **contact_data,
+        tags=tags,
+        latest_ai_summary=(
+            AISummaryResponse.model_validate(latest_summary)
+            if latest_summary is not None
+            else None
+        ),
+    )
 
 
 @router.post(
