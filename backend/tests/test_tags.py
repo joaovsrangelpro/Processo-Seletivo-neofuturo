@@ -66,6 +66,30 @@ def create_tag(db: Session, name: str = "Cliente") -> Tag:
     return tag
 
 
+def test_list_tags_returns_empty_list(db_session: Session) -> None:
+    response = asyncio.run(request("GET", "/tags", db_session))
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_tags_returns_deterministic_case_insensitive_order(
+    db_session: Session,
+) -> None:
+    create_tag(db_session, "Parceiro")
+    create_tag(db_session, "cliente")
+    create_tag(db_session, "Ativo")
+
+    response = asyncio.run(request("GET", "/tags", db_session))
+
+    assert response.status_code == 200
+    assert [tag["name"] for tag in response.json()] == [
+        "Ativo",
+        "cliente",
+        "Parceiro",
+    ]
+
+
 def test_create_tag(db_session: Session) -> None:
     response = asyncio.run(request("POST", "/tags", db_session, {"name": "Cliente"}))
 

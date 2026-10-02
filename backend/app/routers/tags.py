@@ -13,6 +13,11 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 DUPLICATE_TAG_DETAIL = "A tag with this name already exists."
 
 
+@router.get("", response_model=list[TagResponse])
+def list_tags(db: Session = Depends(get_db)) -> list[Tag]:
+    return list(db.scalars(select(Tag).order_by(func.lower(Tag.name), Tag.id)).all())
+
+
 @router.post("", response_model=TagResponse, status_code=status.HTTP_201_CREATED)
 def create_tag(
     payload: TagCreate,
