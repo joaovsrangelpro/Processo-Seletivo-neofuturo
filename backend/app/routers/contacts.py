@@ -33,9 +33,14 @@ ASSOCIATION_DELETE_CONFLICT_DETAIL = "The tag association could not be removed."
 def list_contacts(
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 10,
+    tag: str | None = None,
     db: Session = Depends(get_db),
 ) -> ContactListResponse:
-    total = db.scalar(select(func.count(Contact.id))) or 0
+    tag_filter = None
+    if tag is not None:
+        tag_filter = Contact.tags.any(func.lower(Tag.name) == tag.strip().lower())
+
+    count_query = select(func.count(Contact.id))
     has_ai_summary = (
         exists()
         .where(AISummary.contact_id == Contact.id)
@@ -56,6 +61,11 @@ def list_contacts(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
+    if tag_filter is not None:
+        count_query = count_query.where(tag_filter)
+        query = query.where(tag_filter)
+
+    total = db.scalar(count_query) or 0
     items = [
         ContactListItem.model_validate(row)
         for row in db.execute(query).mappings().all()
