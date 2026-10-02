@@ -95,8 +95,14 @@ def test_fetch_address_maps_viacep_response(monkeypatch: pytest.MonkeyPatch) -> 
     assert options["timeout"] == 5.0
 
 
-def test_fetch_address_rejects_unknown_cep(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = StubAsyncClient(response=make_response(200, json={"erro": True}))
+@pytest.mark.parametrize("error_value", [True, "true"])
+def test_fetch_address_rejects_unknown_cep(
+    error_value: bool | str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = StubAsyncClient(
+        response=make_response(200, json={"erro": error_value})
+    )
     mock_client(monkeypatch, client)
 
     with pytest.raises(ViaCEPNotFoundError):

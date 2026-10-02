@@ -37,7 +37,8 @@ async def fetch_address(cep: str) -> AddressEnrichmentResponse:
 
     if not isinstance(data, dict):
         raise ViaCEPServiceError
-    if data.get("erro") is True:
+    error_value = data.get("erro")
+    if error_value is True or error_value == "true":
         raise ViaCEPNotFoundError
 
     try:
