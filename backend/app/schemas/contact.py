@@ -48,3 +48,15 @@ class ContactResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ContactListItem(ContactResponse):
+    has_ai_summary: bool
+
+
+class ContactListResponse(BaseModel):
+    items: list[ContactListItem]
+    page: int
+    page_size: int
+    total: int
+    pages: int

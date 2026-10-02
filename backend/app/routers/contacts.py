@@ -1,13 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import select
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.ai_summary import AISummary
 from app.models.contact import Contact
 from app.models.contact_tag import ContactTag
 from app.models.tag import Tag
-from app.schemas.contact import ContactCreate, ContactResponse
+from app.schemas.contact import (
+    ContactCreate,
+    ContactListItem,
+    ContactListResponse,
+    ContactResponse,
+)
 from app.schemas.tag import ContactTagCreate, ContactTagResponse
 
 
@@ -19,6 +27,47 @@ TAG_NOT_FOUND_DETAIL = "Tag not found."
 DUPLICATE_ASSOCIATION_DETAIL = "This tag is already associated with the contact."
 ASSOCIATION_NOT_FOUND_DETAIL = "This tag is not associated with the contact."
 ASSOCIATION_DELETE_CONFLICT_DETAIL = "The tag association could not be removed."
+
+
+@router.get("", response_model=ContactListResponse)
+def list_contacts(
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 10,
+    db: Session = Depends(get_db),
+) -> ContactListResponse:
+    total = db.scalar(select(func.count(Contact.id))) or 0
+    has_ai_summary = (
+        exists()
+        .where(AISummary.contact_id == Contact.id)
+        .label("has_ai_summary")
+    )
+    query = (
+        select(
+            Contact.id,
+            Contact.full_name,
+            Contact.email,
+            Contact.phone,
+            Contact.source,
+            Contact.address,
+            Contact.created_at,
+            has_ai_summary,
+        )
+        .order_by(Contact.created_at.desc(), Contact.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items = [
+        ContactListItem.model_validate(row)
+        for row in db.execute(query).mappings().all()
+    ]
+
+    return ContactListResponse(
+        items=items,
+        page=page,
+        page_size=page_size,
+        total=total,
+        pages=(total + page_size - 1) // page_size,
+    )
 
 
 @router.post("", response_model=ContactResponse, status_code=status.HTTP_201_CREATED)
