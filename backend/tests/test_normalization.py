@@ -1,6 +1,7 @@
 import pytest
 
 from app.services.normalization import (
+    normalize_cep,
     normalize_email,
     normalize_name,
     normalize_phone,
@@ -43,3 +44,14 @@ def test_normalize_phone(raw_phone: str) -> None:
 def test_normalize_phone_rejects_incorrect_digit_count() -> None:
     with pytest.raises(ValueError, match="exactly 11 digits"):
         normalize_phone("21 8765-4321")
+
+
+@pytest.mark.parametrize("raw_cep", ["22451-900", "22451900"])
+def test_normalize_cep(raw_cep: str) -> None:
+    assert normalize_cep(raw_cep) == "22451900"
+
+
+@pytest.mark.parametrize("raw_cep", ["2245190", "22451A900"])
+def test_normalize_cep_rejects_invalid_value(raw_cep: str) -> None:
+    with pytest.raises(ValueError, match="exactly 8 digits"):
+        normalize_cep(raw_cep)
