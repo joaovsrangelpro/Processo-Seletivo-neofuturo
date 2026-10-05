@@ -1,11 +1,18 @@
+from time import monotonic
+
 import httpx
 from pydantic import ValidationError
 
 from app.schemas.contact import AddressEnrichmentResponse
+from app.services.normalization import normalize_cep
 
 
 VIACEP_URL = "https://viacep.com.br/ws/{cep}/json/"
 VIACEP_TIMEOUT_SECONDS = 5.0
+VIACEP_CACHE_TTL_SECONDS = 3600.0
+VIACEP_CACHE_MAX_ENTRIES = 256
+
+_cache: dict[str, tuple[AddressEnrichmentResponse, float]] = {}
 
 
 class ViaCEPNotFoundError(Exception):
@@ -21,6 +28,14 @@ class ViaCEPServiceError(Exception):
 
 
 async def fetch_address(cep: str) -> AddressEnrichmentResponse:
+    cep = normalize_cep(cep)
+    cached = _cache.get(cep)
+    if cached is not None:
+        address, expires_at = cached
+        if monotonic() < expires_at:
+            return address.model_copy(deep=True)
+        del _cache[cep]
+
     try:
         async with httpx.AsyncClient(timeout=VIACEP_TIMEOUT_SECONDS) as client:
             response = await client.get(VIACEP_URL.format(cep=cep))
@@ -42,7 +57,7 @@ async def fetch_address(cep: str) -> AddressEnrichmentResponse:
         raise ViaCEPNotFoundError
 
     try:
-        return AddressEnrichmentResponse(
+        address = AddressEnrichmentResponse(
             cep=f"{cep[:5]}-{cep[5:]}",
             logradouro=data["logradouro"],
             bairro=data["bairro"],
@@ -51,3 +66,12 @@ async def fetch_address(cep: str) -> AddressEnrichmentResponse:
         )
     except (KeyError, ValidationError) as error:
         raise ViaCEPServiceError from error
+
+    now = monotonic()
+    expired = [key for key, (_, expires_at) in _cache.items() if expires_at <= now]
+    for key in expired:
+        del _cache[key]
+    if cep not in _cache and len(_cache) >= VIACEP_CACHE_MAX_ENTRIES:
+        del _cache[next(iter(_cache))]
+    _cache[cep] = (address.model_copy(deep=True), now + VIACEP_CACHE_TTL_SECONDS)
+    return address

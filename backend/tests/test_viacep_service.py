@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Generator
 from typing import Any
 
 import httpx
@@ -11,6 +12,15 @@ from app.services.viacep_service import (
     ViaCEPTimeoutError,
     fetch_address,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_address_cache() -> Generator[None, None, None]:
+    viacep_service._cache.clear()
+    try:
+        yield
+    finally:
+        viacep_service._cache.clear()
 
 
 class StubAsyncClient:
