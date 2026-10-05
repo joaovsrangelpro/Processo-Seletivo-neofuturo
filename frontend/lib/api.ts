@@ -1,4 +1,4 @@
-import type { ContactDetail, ContactListResponse, ContactTagResponse, Tag } from "./types";
+import type { AISummary, ContactDetail, ContactListResponse, ContactTagResponse, Tag } from "./types";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000"
@@ -75,4 +75,8 @@ export function addTagToContact(contactId: number, tagId: number): Promise<Conta
 
 export function removeTagFromContact(contactId: number, tagId: number): Promise<void> {
   return request<void>(`/contacts/${contactId}/tags/${tagId}`, { method: "DELETE" });
+}
+
+export function summarizeContact(contactId: number): Promise<AISummary> {
+  return request<AISummary>(`/contacts/${contactId}/summarize`, { method: "POST" });
 }
