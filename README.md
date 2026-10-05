@@ -159,6 +159,21 @@ instalação estão em [frontend/tests/README.md](frontend/tests/README.md).
 - Testes usam mocks para integrações externas; abrir páginas, build e lint não
   geram resumos nem consomem OpenAI.
 
+## Diferenciais
+
+- Suíte backend com testes unitários e de integração para normalização, contatos,
+  tags, consultas, importação e integrações externas simuladas, sem internet real.
+- Rate limit da OpenAI retorna HTTP 429 com mensagem amigável, sem expor detalhes
+  internos nem persistir resumo parcial. `max_retries=0` impede novas tentativas;
+  o teste com SDK e transporte simulado confirma uma única chamada, sem fallback.
+- Cache ViaCEP em memória por CEP normalizado, sem dependência externa. O TTL de
+  1 hora, medido com `time.monotonic()`, reduz consultas repetidas e permite
+  atualização periódica. Armazena apenas endereços válidos, nunca erros.
+- O cache limita-se a 256 entradas: remove expiradas antes da inserção e, se
+  necessário, a mais antiga. É local ao processo, reinicia com a aplicação e
+  cada worker possui seu próprio cache. Os testes limpam o cache entre cenários.
+- Deploy não realizado nesta etapa.
+
 ## Verificação local
 
 No Swagger, crie contatos e tags. Confira a listagem, filtro, paginação e detalhe;
