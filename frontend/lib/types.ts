@@ -21,3 +21,30 @@ export interface Tag {
   id: number;
   name: string;
 }
+
+export interface Address {
+  cep: string;
+  logradouro: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+}
+
+export interface AISummary {
+  id: number;
+  contact_id: number;
+  summary_text: string;
+  generated_at: string;
+}
+
+export interface ContactDetail {
+  id: number;
+  full_name: string;
+  email: string;
+  phone: string;
+  source: string | null;
+  address: Address | null;
+  created_at: string;
+  tags: Tag[];
+  latest_ai_summary: AISummary | null;
+}

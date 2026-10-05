@@ -1,0 +1,104 @@
+.backNav {
+  margin-bottom: 28px;
+}
+
+.contactHeader {
+  padding-bottom: 28px;
+}
+
+.contactHeader h1 {
+  margin: 8px 0 24px;
+  font-size: 28px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  margin: 0;
+}
+
+.fields dt {
+  margin-bottom: 6px;
+  color: #687583;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.fields dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.section {
+  padding: 26px 0;
+  border-top: 1px solid #dce2e8;
+}
+
+.section h2 {
+  margin-bottom: 18px;
+  font-size: 18px;
+}
+
+.muted {
+  color: #687583;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.tagList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #b9ddd7;
+  border-radius: 6px;
+  background: #e7f3f0;
+  color: #115e59;
+  font-size: 13px;
+}
+
+.tagName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.summaryText {
+  max-width: 900px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  .contactHeader h1 {
+    font-size: 24px;
+  }
+
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 16px;
+  }
+}
+
+@media (max-width: 420px) {
+  .fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
