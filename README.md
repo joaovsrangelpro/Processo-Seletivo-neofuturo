@@ -166,3 +166,21 @@ adicione/remova tags e importe um lote misto em `/import`. Consulte o GET do
 contato para conferir persistência. Para IA, visualizar um resumo existente não
 gera cobrança; clicar em **Gerar resumo com IA** faz uma chamada real se houver
 chave configurada. Não é preciso repetir essa chamada para validar a interface.
+
+## Validação manual
+
+Testes manuais realizados:
+
+- Criação de contato pelo Swagger, confirmando normalização do nome, email e telefone.
+- Tentativa de criação com email duplicado, confirmando rejeição com HTTP 409.
+- Visualização dos contatos na listagem e navegação para o detalhe.
+- Criação de tags pelo Swagger e associação/remoção pelo frontend.
+- Recarregamento da página para confirmar persistência das associações.
+- Validação do filtro por tag e da paginação.
+- Importação em lote pelo frontend, conferindo contatos importados, rejeitados e motivos.
+- Validação de JSON inválido (`[`) e conteúdo que não é array (`{}`), confirmando
+  erros antes do envio.
+- Consulta de CEP pelo frontend e persistência do endereço após recarregar a página.
+- Geração explícita de resumo com IA e persistência após recarregar, sem geração automática.
+- Consulta de `GET /contacts/{contact_id}` pelo Swagger, confirmando que tags,
+  endereço e último resumo correspondem aos dados exibidos no frontend.
