@@ -25,6 +25,13 @@ importação em lote, resumos de IA e enriquecimento de endereço por CEP.
 
 ## Variáveis de ambiente
 
+Para obter o projeto e entrar na pasta do repositório:
+
+```bash
+git clone https://github.com/joaovsrangelpro/Processo-Seletivo-neofuturo.git
+cd Processo-Seletivo-neofuturo
+```
+
 Na raiz do repositório, prepare os arquivos locais sem sobrescrever configurações
 já existentes:
 
@@ -180,6 +187,19 @@ adicione/remova tags e importe um lote misto em `/import`. Consulte o GET do
 contato para conferir persistência. Para IA, visualizar um resumo existente não
 gera cobrança; clicar em **Gerar resumo com IA** faz uma chamada real se houver
 chave configurada. Não é preciso repetir essa chamada para validar a interface.
+
+## Validação final
+
+- Instalação do backend em virtualenv novo e frontend pelo `package-lock.json`.
+- Migrations aplicadas do zero em banco isolado, confirmando as quatro tabelas,
+  JSONB, unicidade, chave composta, timestamps com timezone e FKs em cascata.
+- Backend: 114 testes aprovados; frontend: 43 testes de interface aprovados.
+- Lint, build, `alembic current`, `alembic check` e `docker compose config` aprovados.
+- OpenAI e ViaCEP simulados nos testes; nenhuma chamada real nesta revisão.
+- Falhas ao persistir endereço retornam erro amigável e fazem rollback, preservando
+  o endereço anterior; o teste de regressão também confirma que a sessão é utilizável.
+- Arquivos rastreados e histórico Git auditados, sem segredos ou caches versionados
+  identificados. Os `.env` privados não foram abertos nem alterados.
 
 ## Validação manual
 
