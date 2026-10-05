@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
+from openai import OpenAI
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.models.contact import Contact
 from app.models.contact_tag import ContactTag
 from app.models.tag import Tag
 from app.routers import contacts as contacts_router
+from app.services import openai_service
 from app.services.openai_service import (
     OpenAIRateLimitError,
     OpenAIServiceError,
@@ -236,6 +238,50 @@ def test_summarize_handles_openai_failure_without_persisting(
     assert response.json() == {"detail": expected_detail}
     generate_summary.assert_called_once()
     assert db_session.scalar(select(func.count(AISummary.id))) == 0
+
+
+def test_sdk_rate_limit_returns_429_without_retry_or_database_changes(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    contact = create_contact(db_session)
+    generate_summary = configure_openai(monkeypatch)
+    generate_summary.side_effect = openai_service.generate_contact_summary
+    transport_handler = Mock(
+        return_value=httpx.Response(
+            429,
+            json={"error": {
+                "message": "internal-provider-detail",
+                "type": "rate_limit_error",
+                "code": "rate_limit_exceeded",
+            }},
+            headers={"x-provider-sensitive": "provider-only-marker"},
+        )
+    )
+    with httpx.Client(transport=httpx.MockTransport(transport_handler)) as client:
+        constructor = Mock(side_effect=lambda **options: OpenAI(**options, http_client=client))
+        monkeypatch.setattr(openai_service, "OpenAI", constructor)
+
+        response = asyncio.run(
+            request("POST", f"/contacts/{contact.id}/summarize", db_session)
+        )
+
+    assert response.status_code == 429
+    assert response.json() == {"detail": "OpenAI rate limit exceeded."}
+    assert "internal-provider-detail" not in response.text
+    assert "provider-only-marker" not in response.text
+    assert "test-api-key" not in response.text
+    assert "x-provider-sensitive" not in response.headers
+    assert "authorization" not in response.headers
+    generate_summary.assert_called_once()
+    constructor.assert_called_once_with(
+        api_key="test-api-key", max_retries=0, timeout=15.0,
+    )
+    transport_handler.assert_called_once()
+    assert db_session.scalar(select(func.count(AISummary.id))) == 0
+    db_session.refresh(contact)
+    assert contact.full_name == "Joao Victor Rangel"
+    assert db_session.is_active
 
 
 def test_multiple_generations_create_history_and_get_returns_latest(
