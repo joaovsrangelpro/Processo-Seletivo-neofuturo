@@ -1,4 +1,11 @@
-import type { AISummary, ContactDetail, ContactListResponse, ContactTagResponse, Tag } from "./types";
+import type {
+  Address,
+  AISummary,
+  ContactDetail,
+  ContactListResponse,
+  ContactTagResponse,
+  Tag,
+} from "./types";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000"
@@ -79,4 +86,11 @@ export function removeTagFromContact(contactId: number, tagId: number): Promise<
 
 export function summarizeContact(contactId: number): Promise<AISummary> {
   return request<AISummary>(`/contacts/${contactId}/summarize`, { method: "POST" });
+}
+
+export function enrichContactAddress(contactId: number, cep: string): Promise<Address> {
+  return request<Address>(`/contacts/${contactId}/enrich-address`, {
+    method: "POST",
+    body: JSON.stringify({ cep }),
+  });
 }
