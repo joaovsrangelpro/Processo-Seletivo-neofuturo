@@ -22,6 +22,12 @@ export interface Tag {
   name: string;
 }
 
+export interface ContactTagResponse {
+  contact_id: number;
+  tag_id: number;
+  tag_name: string;
+}
+
 export interface Address {
   cep: string;
   logradouro: string;

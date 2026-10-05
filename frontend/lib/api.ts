@@ -1,4 +1,4 @@
-import type { ContactDetail, ContactListResponse, Tag } from "./types";
+import type { ContactDetail, ContactListResponse, ContactTagResponse, Tag } from "./types";
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000"
@@ -11,14 +11,25 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string): Promise<T> {
+async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set("Accept", "application/json");
+  if (options.body !== undefined) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(`${API_URL}${path}`, {
+    ...options,
     cache: "no-store",
-    headers: { Accept: "application/json" },
+    headers,
   });
 
   if (!response.ok) {
     throw new ApiError(response.status);
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
   }
 
   return (await response.json()) as T;
@@ -44,13 +55,24 @@ export function getContacts({
     params.set("tag", tag);
   }
 
-  return get<ContactListResponse>(`/contacts?${params.toString()}`);
+  return request<ContactListResponse>(`/contacts?${params.toString()}`);
 }
 
 export function getTags(): Promise<Tag[]> {
-  return get<Tag[]>("/tags");
+  return request<Tag[]>("/tags");
 }
 
 export function getContact(id: number): Promise<ContactDetail> {
-  return get<ContactDetail>(`/contacts/${id}`);
+  return request<ContactDetail>(`/contacts/${id}`);
+}
+
+export function addTagToContact(contactId: number, tagId: number): Promise<ContactTagResponse> {
+  return request<ContactTagResponse>(`/contacts/${contactId}/tags`, {
+    method: "POST",
+    body: JSON.stringify({ tag_id: tagId }),
+  });
+}
+
+export function removeTagFromContact(contactId: number, tagId: number): Promise<void> {
+  return request<void>(`/contacts/${contactId}/tags/${tagId}`, { method: "DELETE" });
 }

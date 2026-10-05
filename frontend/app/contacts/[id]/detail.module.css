@@ -77,6 +77,102 @@
   overflow-wrap: anywhere;
 }
 
+.tagRemove {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #115e59;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.tagRemove:hover:not(:disabled) {
+  background: #cbe8e0;
+}
+
+.controlRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  width: 280px;
+  max-width: 100%;
+  min-width: 0;
+  color: #44515e;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid #b9c3cd;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1b2430;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.primaryButton {
+  min-height: 40px;
+  max-width: 100%;
+  padding: 9px 16px;
+  border: 1px solid #0f766e;
+  border-radius: 6px;
+  background: #0f766e;
+  color: #ffffff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #115e59;
+}
+
+.primaryButton:disabled,
+.tagRemove:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.primaryButton:focus-visible,
+.tagRemove:focus-visible,
+.field input:focus-visible,
+.field select:focus-visible {
+  outline: 3px solid rgb(15 118 110 / 30%);
+  outline-offset: 2px;
+}
+
+.actionSpacing {
+  margin-top: 18px;
+}
+
+.error {
+  margin-top: 12px;
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 .summaryText {
   max-width: 900px;
   margin-bottom: 10px;
