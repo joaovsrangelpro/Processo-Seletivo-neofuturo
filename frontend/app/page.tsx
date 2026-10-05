@@ -184,9 +184,12 @@ export default async function Home({ searchParams }: HomeProps) {
       <div className={styles.page}>
         <AppHeader />
         <main className={styles.content}>
-          <div className={styles.titleBlock}>
-            <p className={styles.eyebrow}>Visão geral</p>
-            <h1>Contatos</h1>
+          <div className={styles.titleRow}>
+            <div className={styles.titleBlock}>
+              <p className={styles.eyebrow}>Visão geral</p>
+              <h1>Contatos</h1>
+            </div>
+            <Link className={styles.secondaryButton} href="/import">Importar contatos</Link>
           </div>
           <ErrorState retryHref={pageHref(page, tag)} />
         </main>
@@ -203,9 +206,12 @@ export default async function Home({ searchParams }: HomeProps) {
             <p className={styles.eyebrow}>Visão geral</p>
             <h1>Contatos</h1>
           </div>
-          <div className={styles.totalCount}>
-            <strong>{contacts.total}</strong>
-            <span>{contacts.total === 1 ? "contato" : "contatos"}</span>
+          <div className={styles.titleActions}>
+            <Link className={styles.secondaryButton} href="/import">Importar contatos</Link>
+            <div className={styles.totalCount}>
+              <strong>{contacts.total}</strong>
+              <span>{contacts.total === 1 ? "contato" : "contatos"}</span>
+            </div>
           </div>
         </div>
 

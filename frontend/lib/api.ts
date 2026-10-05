@@ -2,6 +2,7 @@ import type {
   Address,
   AISummary,
   ContactDetail,
+  ContactImportReport,
   ContactListResponse,
   ContactTagResponse,
   Tag,
@@ -92,5 +93,12 @@ export function enrichContactAddress(contactId: number, cep: string): Promise<Ad
   return request<Address>(`/contacts/${contactId}/enrich-address`, {
     method: "POST",
     body: JSON.stringify({ cep }),
+  });
+}
+
+export function importContacts(contacts: unknown[]): Promise<ContactImportReport> {
+  return request<ContactImportReport>("/contacts/import", {
+    method: "POST",
+    body: JSON.stringify(contacts),
   });
 }

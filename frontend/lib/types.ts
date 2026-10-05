@@ -54,3 +54,9 @@ export interface ContactDetail {
   tags: Tag[];
   latest_ai_summary: AISummary | null;
 }
+
+export interface ContactImportReport {
+  imported: number;
+  rejected: number;
+  errors: { index: number; reason: string }[];
+}

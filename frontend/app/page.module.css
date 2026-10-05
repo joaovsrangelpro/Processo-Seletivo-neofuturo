@@ -54,6 +54,13 @@
   gap: 6px;
 }
 
+.titleActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
 .titleBlock h1 {
   font-size: 30px;
   line-height: 1.2;
