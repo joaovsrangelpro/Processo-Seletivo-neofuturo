@@ -1,6 +1,7 @@
 import asyncio
 
 import httpx
+import pytest
 
 from app.main import app
 
@@ -25,21 +26,42 @@ def test_health_check() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_cors_allows_local_frontend_get_requests() -> None:
+@pytest.mark.parametrize("origin", ["http://localhost:3000", "http://127.0.0.1:3000"])
+@pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
+def test_cors_allows_local_frontend_requests(origin: str, method: str) -> None:
+    response = asyncio.run(
+        request(
+            "OPTIONS",
+            "/contacts",
+            {
+                "Origin": origin,
+                "Access-Control-Request-Method": method,
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert method in response.headers["access-control-allow-methods"]
+    assert "content-type" in response.headers["access-control-allow-headers"].lower()
+    assert "access-control-allow-credentials" not in response.headers
+
+
+def test_cors_rejects_unsupported_methods() -> None:
     response = asyncio.run(
         request(
             "OPTIONS",
             "/contacts",
             {
                 "Origin": "http://localhost:3000",
-                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Method": "PUT",
             },
         )
     )
 
-    assert response.status_code == 200
-    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
-    assert "GET" in response.headers["access-control-allow-methods"]
+    assert response.status_code == 400
+    assert "PUT" not in response.headers["access-control-allow-methods"]
 
 
 def test_cors_does_not_allow_unknown_origins() -> None:
