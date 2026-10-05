@@ -1,9 +1,10 @@
 import asyncio
 from collections.abc import Generator
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import engine, get_db
@@ -193,3 +194,29 @@ def test_replaces_existing_address(
     assert response.status_code == 200
     db_session.refresh(contact)
     assert contact.address == ADDRESS.model_dump()
+
+
+def test_persistence_failure_rolls_back_address_and_returns_friendly_error(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    previous_address = {**ADDRESS.model_dump(), "logradouro": "Previous address"}
+    contact = create_contact(db_session, address=previous_address)
+    fetch_address = AsyncMock(return_value=ADDRESS)
+    monkeypatch.setattr(contacts_router, "fetch_address", fetch_address)
+    monkeypatch.setattr(
+        db_session, "commit", Mock(side_effect=SQLAlchemyError("internal-database-detail")),
+    )
+    rollback = Mock(wraps=db_session.rollback)
+    monkeypatch.setattr(db_session, "rollback", rollback)
+
+    response = asyncio.run(post_enrichment(contact.id, "22451-900", db_session))
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "The address could not be saved."}
+    assert "internal-database-detail" not in response.text
+    fetch_address.assert_awaited_once_with("22451900")
+    rollback.assert_called_once()
+    db_session.refresh(contact)
+    assert contact.address == previous_address
+    assert db_session.is_active

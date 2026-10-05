@@ -51,6 +51,7 @@ ASSOCIATION_DELETE_CONFLICT_DETAIL = "The tag association could not be removed."
 CEP_NOT_FOUND_DETAIL = "CEP not found."
 VIACEP_UNAVAILABLE_DETAIL = "ViaCEP service is unavailable."
 VIACEP_TIMEOUT_DETAIL = "ViaCEP request timed out."
+ADDRESS_PERSISTENCE_DETAIL = "The address could not be saved."
 OPENAI_KEY_MISSING_DETAIL = "OpenAI service is not configured."
 OPENAI_RATE_LIMIT_DETAIL = "OpenAI rate limit exceeded."
 OPENAI_UNAVAILABLE_DETAIL = "OpenAI service is unavailable."
@@ -360,6 +361,9 @@ def summarize_contact(
         status.HTTP_404_NOT_FOUND: {
             "description": "Contact or CEP not found.",
         },
+        status.HTTP_500_INTERNAL_SERVER_ERROR: {
+            "description": "The address could not be saved.",
+        },
         status.HTTP_502_BAD_GATEWAY: {
             "description": "ViaCEP is unavailable or returned an invalid response.",
         },
@@ -399,7 +403,14 @@ async def enrich_contact_address(
         ) from error
 
     contact.address = address.model_dump()
-    db.commit()
+    try:
+        db.commit()
+    except SQLAlchemyError as error:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=ADDRESS_PERSISTENCE_DETAIL,
+        ) from error
     db.refresh(contact, attribute_names=["address"])
     return AddressEnrichmentResponse.model_validate(contact.address)
 
