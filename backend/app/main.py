@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import settings
 from app.routers.contacts import router as contacts_router
 from app.routers.tags import router as tags_router
 
@@ -8,10 +9,8 @@ from app.routers.tags import router as tags_router
 app = FastAPI(title="Contact Manager API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.allowed_frontend_origins,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
 )
 app.include_router(contacts_router)

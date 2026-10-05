@@ -9,6 +9,7 @@ from app.config import Settings
 def isolated_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("FRONTEND_ORIGINS", raising=False)
 
 
 def test_normalizes_postgresql_url_from_environment(
@@ -72,3 +73,40 @@ def test_invalid_database_url_error_does_not_display_the_input() -> None:
 
     assert "DATABASE_URL must be a valid SQLAlchemy URL." in str(error.value)
     assert "invalid-url-with-fake-secret" not in str(error.value)
+
+
+def test_default_frontend_origins_preserve_local_development() -> None:
+    config = Settings(_env_file=None)
+
+    assert config.allowed_frontend_origins == [
+        "http://localhost:3000", "http://127.0.0.1:3000",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("origins", "expected"),
+    [
+        (
+            " https://frontend.example.test , , https://admin.example.test, ",
+            ["https://frontend.example.test", "https://admin.example.test"],
+        ),
+        ("", []),
+        (" , , ", []),
+    ],
+)
+def test_frontend_origins_from_environment_are_trimmed_and_empty_values_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+    origins: str,
+    expected: list[str],
+) -> None:
+    monkeypatch.setenv("FRONTEND_ORIGINS", origins)
+
+    config = Settings(_env_file=None)
+
+    assert config.allowed_frontend_origins == expected
+
+
+@pytest.mark.parametrize("origins", ["*", "https://frontend.example.test, *"])
+def test_frontend_origins_reject_wildcards(origins: str) -> None:
+    with pytest.raises(ValidationError, match="must use explicit origins"):
+        Settings(_env_file=None, FRONTEND_ORIGINS=origins)

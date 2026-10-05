@@ -18,6 +18,25 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(
         default=None, validation_alias="OPENAI_API_KEY", repr=False,
     )
+    frontend_origins: str = Field(
+        default="http://localhost:3000,http://127.0.0.1:3000",
+        validation_alias="FRONTEND_ORIGINS",
+    )
+
+    @property
+    def allowed_frontend_origins(self) -> list[str]:
+        return [
+            origin.strip()
+            for origin in self.frontend_origins.split(",")
+            if origin.strip()
+        ]
+
+    @field_validator("frontend_origins")
+    @classmethod
+    def reject_wildcard_origins(cls, value: str) -> str:
+        if any(origin.strip() == "*" for origin in value.split(",")):
+            raise ValueError("FRONTEND_ORIGINS must use explicit origins, not '*'.")
+        return value
 
     @field_validator("database_url")
     @classmethod
