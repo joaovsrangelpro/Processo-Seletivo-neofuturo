@@ -1,13 +1,16 @@
 # Browser validation
 
 The tests use Node's built-in test runner and Playwright with an installed Chrome.
-They start an isolated mock API and a production Next.js server, cover contact
-detail actions, and restore a normal production build during cleanup. No request
-is forwarded to OpenAI or ViaCEP. Project dependencies are unchanged.
+They start an isolated mock API and a production Next.js server, cover listing,
+contact detail and batch import actions, and restore a normal production build
+during cleanup. No request is forwarded to OpenAI or ViaCEP. Project dependencies
+are unchanged.
 
-From `frontend`, using the Playwright installation available in this workspace:
+From `frontend`, prepare the existing browser tool outside the application
+dependencies and run the suite:
 
 ```sh
+npm install --prefix /tmp/contact-manager-browser --no-save playwright@1.63.0
 PLAYWRIGHT_MODULE_PATH=/tmp/contact-manager-browser/node_modules/playwright npm run test:browser
 ```
 
