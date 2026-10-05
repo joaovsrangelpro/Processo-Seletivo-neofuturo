@@ -46,22 +46,36 @@ async function mockApi(request, response) {
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
   if (request.method === "OPTIONS") return send(response, 204);
 
-  const path = new URL(request.url, apiUrl).pathname;
+  const url = new URL(request.url, apiUrl);
+  const path = url.pathname;
   if (path === "/tags") return send(response, state.tagsStatus, tags);
   if (request.method === "GET" && path === "/contacts/1") {
     state.calls.detail++;
     return send(response, state.detailStatus, state.contact);
   }
   if (request.method === "GET" && path === "/contacts") {
+    const tag = url.searchParams.get("tag");
+    const filtered = state.list.filter(item => !tag || item.tags.some(item => item.name === tag));
+    const currentPage = Number(url.searchParams.get("page") || 1);
+    const pageSize = Number(url.searchParams.get("page_size") || 10);
     return send(response, 200, {
-      items: [{ ...state.contact, has_ai_summary: Boolean(state.contact.latest_ai_summary) }],
-      page: 1, page_size: 10, pages: 1, total: 1,
+      items: filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+        .map(item => ({ ...item, has_ai_summary: Boolean(item.latest_ai_summary) })),
+      page: currentPage, page_size: pageSize, pages: Math.ceil(filtered.length / pageSize), total: filtered.length,
     });
   }
 
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
   const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {};
+  if (request.method === "POST" && path === "/contacts/import") {
+    state.calls.import++;
+    state.importPayload = body;
+    state.importStarted?.();
+    if (state.importGate) await state.importGate;
+    if (state.importStatus !== 200) return send(response, state.importStatus, { detail: "INTERNAL_TRACE" });
+    return send(response, 200, state.importReport ?? { imported: body.length, rejected: 0, errors: [] });
+  }
   if (request.method === "POST" && path === "/contacts/1/tags") {
     if (state.addStatus !== 201) return send(response, state.addStatus, { detail: "INTERNAL_ERROR" });
     const tag = tags.find(tag => tag.id === body.tag_id);
@@ -98,7 +112,32 @@ async function openContact() {
   await page.waitForLoadState("networkidle");
 }
 
-describe("Contact detail with an isolated mock API", { timeout: 90000 }, () => {
+async function openImport() {
+  await page.goto(`${frontendUrl}/import`);
+  await page.waitForLoadState("networkidle");
+}
+
+async function submitImport(payload) {
+  await page.getByLabel("Contatos (JSON)").fill(JSON.stringify(payload));
+  await page.getByRole("button", { name: "Importar contatos", exact: true }).click();
+}
+
+async function expectCounts(imported, rejected) {
+  const report = page.getByRole("region", { name: "Resultado da importação" });
+  await report.waitFor();
+  assert.equal(await report.locator("dl > div").nth(0).locator("dd").innerText(), String(imported));
+  assert.equal(await report.locator("dl > div").nth(1).locator("dd").innerText(), String(rejected));
+}
+
+function listingFixture() {
+  return Array.from({ length: 21 }, (_, index) => ({
+    ...structuredClone(contact), id: index + 1, full_name: `Contato ${index + 1}`,
+    email: `contato${index + 1}@example.com`, tags: [tags[index % 2]],
+    latest_ai_summary: index ? null : summary,
+  }));
+}
+
+describe("Contact manager with an isolated mock API", { timeout: 90000 }, () => {
   before(async () => {
     server = createServer((request, response) => {
       mockApi(request, response).catch(error => {
@@ -138,9 +177,10 @@ describe("Contact detail with an isolated mock API", { timeout: 90000 }, () => {
 
   beforeEach(async () => {
     state = {
-      contact: structuredClone(contact), calls: { detail: 0, summary: 0, address: 0 },
+      contact: structuredClone(contact), list: [structuredClone(contact)],
+      calls: { detail: 0, summary: 0, address: 0, import: 0 },
       detailStatus: 200, tagsStatus: 200, addStatus: 201, removeStatus: 204,
-      summaryStatus: 201, addressStatus: 200,
+      summaryStatus: 201, addressStatus: 200, importStatus: 200,
     };
     pageErrors = [];
     page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
@@ -363,5 +403,176 @@ describe("Contact detail with an isolated mock API", { timeout: 90000 }, () => {
     await page.screenshot({ path: "/tmp/contact-detail-mobile-actions.png" });
     await page.getByRole("heading", { name: "Endereço", exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: "/tmp/contact-detail-mobile-address.png" });
+  });
+
+  it("navigates from the listing to import and back", async () => {
+    await page.goto(frontendUrl);
+    await page.getByRole("link", { name: "Importar contatos", exact: true }).click();
+    await page.getByLabel("Contatos (JSON)").waitFor();
+    await page.getByRole("link", { name: "Voltar para contatos" }).click();
+    await page.getByRole("heading", { name: "Lista de contatos" }).waitFor();
+    assert.equal(state.calls.import, 0);
+  });
+
+  it("preserves listing pagination and the summary indicator", async () => {
+    state.list = listingFixture();
+    await page.goto(frontendUrl);
+    await page.getByText("Página 1 de 3", { exact: true }).waitFor();
+    await page.getByText("Disponível", { exact: true }).waitFor();
+    await page.getByRole("link", { name: "Próxima", exact: true }).click();
+    await page.getByText("Página 2 de 3", { exact: true }).waitFor();
+    assert.equal(await page.locator("tbody tr").count(), 10);
+    assert.equal(state.calls.summary, 0);
+  });
+
+  it("resets pagination when filtering by tag", async () => {
+    state.list = listingFixture();
+    await page.goto(`${frontendUrl}/?page=2`);
+    await page.waitForLoadState("networkidle");
+    await page.getByLabel("Filtrar por tag").selectOption("Lead");
+    await page.getByText("Filtrando por Lead", { exact: true }).waitFor();
+    await page.getByText("Página 1 de 1", { exact: true }).waitFor();
+    assert.equal(await page.locator("tbody tr").count(), 10);
+    assert.equal(new URL(page.url()).searchParams.has("page"), false);
+  });
+
+  it("forwards valid JSON unchanged and displays a successful report", async () => {
+    const payload = [
+      { full_name: " João   Silva ", email: "JOAO@EMAIL.COM", phone: "21 99999-9999", source: "import" },
+      { full_name: "Maria Souza", email: "maria@email.com", phone: "21988888888" },
+    ];
+    await openImport();
+    await submitImport(payload);
+    await expectCounts(2, 0);
+    await page.getByText("Todos os contatos foram importados.", { exact: true }).waitFor();
+    assert.deepEqual(state.importPayload, payload);
+    assert.equal(state.calls.import, 1);
+    assert.equal(state.calls.summary, 0);
+    assert.equal(state.calls.address, 0);
+  });
+
+  it("rejects invalid JSON locally without calling the API", async () => {
+    await openImport();
+    await page.getByLabel("Contatos (JSON)").fill('[{"email":');
+    await page.getByRole("button", { name: "Importar contatos", exact: true }).click();
+    await page.getByText("JSON inválido. Verifique a sintaxe do conteúdo.").waitFor();
+    assert.equal(state.calls.import, 0);
+  });
+
+  for (const value of [{ contacts: [] }, null, "contatos"]) {
+    it(`rejects non-array JSON ${JSON.stringify(value)} locally`, async () => {
+      await openImport();
+      await submitImport(value);
+      await page.getByText("O conteúdo JSON deve ser um array de contatos.").waitFor();
+      assert.equal(state.calls.import, 0);
+    });
+  }
+
+  it("displays partial import counts and the exact rejection reasons", async () => {
+    state.importReport = { imported: 1, rejected: 2, errors: [
+      { index: 1, reason: "A contact with this email already exists." },
+      { index: 2, reason: "phone: Value error, Phone must contain exactly 11 digits." },
+    ] };
+    await openImport();
+    await submitImport([contact, contact, contact]);
+    await expectCounts(1, 2);
+    await page.getByText("Item 2", { exact: true }).waitFor();
+    await page.getByText("Item 3", { exact: true }).waitFor();
+    for (const error of state.importReport.errors) await page.getByText(error.reason, { exact: true }).waitFor();
+    assert.equal(await page.getByText("Todos os contatos foram importados.").count(), 0);
+  });
+
+  it("leaves contact validation to the backend even for invalid array items", async () => {
+    state.importReport = { imported: 0, rejected: 3, errors: [
+      { index: 0, reason: "Input should be a valid dictionary or instance of ContactCreate" },
+      { index: 1, reason: "full_name: Field required; email: Field required; phone: Field required" },
+      { index: 2, reason: "Input should be a valid dictionary or instance of ContactCreate" },
+    ] };
+    await openImport();
+    await submitImport([null, {}, 42]);
+    await expectCounts(0, 3);
+    assert.deepEqual(state.importPayload, [null, {}, 42]);
+  });
+
+  it("handles an empty array without a misleading success count", async () => {
+    await openImport();
+    await submitImport([]);
+    await expectCounts(0, 0);
+    await page.getByText("Nenhum contato enviado.").waitFor();
+  });
+
+  for (const status of [500, 422]) {
+    it(`handles import API error ${status} without exposing internal details`, async () => {
+      state.importStatus = status;
+      await openImport();
+      await submitImport([contact]);
+      await page.locator("#import-error").waitFor();
+      assert.equal(await page.getByText("INTERNAL_TRACE").count(), 0);
+      assert.equal(await page.getByRole("button", { name: "Importar contatos", exact: true }).isEnabled(), true);
+      assert.equal(state.calls.import, 1);
+    });
+  }
+
+  it("handles an import network error without automatic retry", async () => {
+    await openImport();
+    let attempts = 0;
+    await page.route(`${apiUrl}/contacts/import`, route => { attempts++; return route.abort(); });
+    await submitImport([contact]);
+    await page.getByText("Não foi possível confirmar a importação. Confira os contatos antes de tentar novamente.").waitFor();
+    assert.equal(attempts, 1);
+    assert.equal(await page.getByRole("button", { name: "Importar contatos", exact: true }).isEnabled(), true);
+  });
+
+  it("disables import controls and prevents repeated submits while pending", async () => {
+    let release;
+    let started;
+    const requestStarted = new Promise(resolve => { started = resolve; });
+    state.importStarted = started;
+    state.importGate = new Promise(resolve => { release = resolve; });
+    await openImport();
+    await page.getByLabel("Contatos (JSON)").fill(JSON.stringify([contact]));
+    await page.getByRole("button", { name: "Importar contatos", exact: true }).evaluate(button => {
+      button.click();
+      button.click();
+      button.form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    try {
+      await requestStarted;
+      await page.getByRole("button", { name: "Importando...", exact: true }).waitFor();
+      assert.equal(await page.getByRole("button", { name: "Importando...", exact: true }).isDisabled(), true);
+      assert.equal(await page.getByLabel("Contatos (JSON)").isDisabled(), true);
+      assert.equal(state.calls.import, 1);
+    } finally {
+      release();
+    }
+    await expectCounts(1, 0);
+    assert.equal(state.calls.import, 1);
+  });
+
+  it("keeps the last report visible after a subsequent invalid submission", async () => {
+    await openImport();
+    await submitImport([contact]);
+    await expectCounts(1, 0);
+    await page.getByLabel("Contatos (JSON)").fill("[");
+    await page.getByRole("button", { name: "Importar contatos", exact: true }).click();
+    await page.locator("#import-error").waitFor();
+    await expectCounts(1, 0);
+    assert.equal(state.calls.import, 1);
+  });
+
+  it("fits the import form and a long rejection report on desktop and mobile", async () => {
+    state.importReport = { imported: 1, rejected: 1, errors: [{ index: 1, reason: "Email inválido: ".repeat(30) }] };
+    await openImport();
+    await submitImport([contact, contact]);
+    await expectCounts(1, 1);
+    await page.screenshot({ path: "/tmp/contact-import-desktop.png" });
+    for (const width of [390, 320]) {
+      await page.setViewportSize({ width, height: 844 });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), width);
+    }
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: "/tmp/contact-import-mobile.png" });
+    await page.getByRole("heading", { name: "Resultado da importação" }).evaluate(element => element.scrollIntoView({ block: "start" }));
+    await page.screenshot({ path: "/tmp/contact-import-mobile-report.png" });
   });
 });
