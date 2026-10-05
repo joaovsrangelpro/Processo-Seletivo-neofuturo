@@ -37,8 +37,6 @@ cp -n frontend/.env.example frontend/.env.local
   públicas de desenvolvimento do Compose.
 - `OPENAI_API_KEY`: opcional para subir a aplicação; preencha somente no `.env`
   local para habilitar geração real de resumos. Sem chave, essa ação retorna 503.
-- `FRONTEND_ORIGINS`: origens CORS separadas por vírgula; por padrão permite
-  `http://localhost:3000` e `http://127.0.0.1:3000`. Espaços e itens vazios são ignorados.
 - `NEXT_PUBLIC_API_URL`: endereço público da API, por padrão
   `http://127.0.0.1:8000`. Não coloque segredos em variáveis `NEXT_PUBLIC_*`.
 
@@ -93,8 +91,8 @@ npm run dev
 ```
 
 Abra `http://localhost:3000`. A listagem dá acesso ao detalhe e a `/import`.
-Por padrão, o CORS permite `localhost:3000` e `127.0.0.1:3000`; mantenha a porta
-3000 ou ajuste `FRONTEND_ORIGINS` para usar outra origem local.
+O CORS permite `localhost:3000` e `127.0.0.1:3000`; mantenha a porta 3000 para
+as ações do frontend funcionarem contra a configuração local padrão da API.
 
 ## Testes
 
@@ -174,47 +172,6 @@ instalação estão em [frontend/tests/README.md](frontend/tests/README.md).
 - O cache limita-se a 256 entradas: remove expiradas antes da inserção e, se
   necessário, a mais antiga. É local ao processo, reinicia com a aplicação e
   cada worker possui seu próprio cache. Os testes limpam o cache entre cenários.
-- Deploy não realizado nesta etapa.
-
-## Deploy
-
-Repositório preparado, mas **nenhum deploy foi realizado**. Arquitetura prevista:
-Vercel para o frontend Next.js, Railway para a API e Railway PostgreSQL para o banco.
-O Docker Compose continua sendo exclusivamente local.
-
-No painel do **Railway**, configure o backend:
-
-- Root Directory: `backend`.
-- Builder: Railpack; Build Command sem override. O `requirements.txt` já declara
-  as dependências necessárias e é instalado automaticamente pelo
-  [Railpack](https://railpack.com/languages/python/).
-- Start Command: `sh start.sh`. O script aplica `alembic upgrade head` e só então
-  executa Uvicorn em `0.0.0.0`, usando `PORT` fornecida pelo Railway (fallback local
-  de 8000). Não use `--reload` em produção.
-- Healthcheck Path: `/health`; retorna HTTP 200 sem consultar banco, OpenAI ou ViaCEP.
-- `DATABASE_URL`: referência à variável do serviço PostgreSQL do Railway, não
-  à conexão local. URLs `postgresql://` são convertidas para `postgresql+psycopg://`,
-  preservando credenciais e parâmetros; URLs já configuradas são mantidas.
-- `OPENAI_API_KEY`: opcional, somente no backend. Sem chave, a aplicação inicia
-  normalmente e apenas a geração de resumo de contato existente retorna 503.
-- `FRONTEND_ORIGINS`: origem HTTPS pública da Vercel, sem caminho ou barra final.
-  Para mais de uma origem, separe por vírgulas. A configuração substitui o padrão
-  local; não permite `*` nem credenciais. GET, POST e DELETE mantêm suporte a preflight.
-
-Não foi criado `railway.toml`: o Railway
-[descontinuou Config as Code para novos serviços](https://docs.railway.com/config-as-code).
-Use o script versionado e configure Root Directory, Start Command e health check
-no painel, sem duplicar essas definições em arquivos da plataforma.
-
-Na **Vercel**, use Root Directory `frontend`, preset Next.js, instalação npm padrão
-e Build Command `npm run build`. Não é necessário `vercel.json`. Configure
-`NEXT_PUBLIC_API_URL` com a URL HTTPS pública do backend antes do build; mudanças
-nessa variável exigem novo build. Ela é pública e nunca deve conter chaves.
-
-No deploy futuro, publique o backend, use seu domínio na Vercel e, depois, atualize
-`FRONTEND_ORIGINS` com a origem final da Vercel e reinicie/republique o backend.
-Segredos ficam nas variáveis do backend; não envie `.env` locais ao Git ou frontend.
-O cache ViaCEP permanece em memória por processo, sendo limpo a cada reinício.
 
 ## Verificação local
 
